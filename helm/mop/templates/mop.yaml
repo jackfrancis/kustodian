@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app: {{ .Values.mop.name }}
+  name: {{ .Values.mop.name }}
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Values.mop.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.mop.name }}
+    spec:
+      initContainers:
+        - name: maintenance-queue
+          image: alpine:3.12
+          command:
+            - sh
+            - -c
+            - >-
+              until [ ! -f /var/run/maintenance-required ] && [ ! -f /var/run/maintenance-in-progress ]; do
+                  echo "maintenance already in-progress, will wait";
+                  sleep 5;
+              done;
+              touch /var/run/maintenance-required;
+              until test -f /var/run/maintenance-in-progress; do
+                  echo "waiting in the maintenance queue";
+                  sleep 5;
+              done;
+          volumeMounts:
+            - name: var-run
+              mountPath: /var/run
+        - name: {{ .Values.mop.name }}-get-script
+          image: curlimages/curl:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - >-
+              curl -fSL -o {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh {{ .Values.mop.targetScript }};
+          volumeMounts:
+            - name: script-write-path
+              mountPath: {{ .Values.mop.everyoneWriteablePath }}
+      containers:
+        - name: {{ .Values.mop.name }}
+          image: alpine:3.12
+          command:
+            - sh
+            - -c
+            - >-
+              chmod +x {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh;
+              echo -e >/etc/cron.d/mop "* * * * * root sh -c 'rm -f /etc/cron.d/mop; {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh && rm -f /var/run/maintenance-required' >/var/log/mop-{{ .Values.mop.name }}.log 2>&1";
+              until test -f /var/log/mop-{{ .Values.mop.name }}.log; do
+                  echo "waiting for cron to execute {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh"
+                  sleep 5
+              done;
+              tail -f /var/log/mop-{{ .Values.mop.name }}.log;
+          volumeMounts:
+            - name: var-run
+              mountPath: /var/run
+            - name: var-log
+              mountPath: /var/log
+            - name: node-crond
+              mountPath: /etc/cron.d
+            - name: script-write-path
+              mountPath: {{ .Values.mop.everyoneWriteablePath }}
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+      terminationGracePeriodSeconds: 0
+      volumes:
+        - hostPath:
+            path: /var/run
+          name: var-run
+        - hostPath:
+            path: /var/log
+          name: var-log
+        - hostPath:
+            path: /etc/cron.d
+          name: node-crond
+        - hostPath:
+            path: {{ .Values.mop.everyoneWriteablePath }}
+          name: script-write-path
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Equal
+          value: "true"
+          effect: NoSchedule

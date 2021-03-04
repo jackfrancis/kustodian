@@ -1,0 +1,14 @@
+apiVersion: v1
+description: A Helm chart for running the kustodian daemon on nodes
+name: kustodian
+version: 0.0.1
+maintainers:
+  - name: Jack Francis
+    email: jackfrancis@gmail.com
+home: https://github.com/jackfrancis/kustodian/README.md
+sources:
+  - https://github.com/jackfrancis/kustodian
+keywords:
+  - kubernetes
+  - node
+  - maintenance

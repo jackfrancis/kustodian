@@ -1,0 +1,8 @@
+# Default values for kustodian
+
+kustodian:
+  name: kustodian
+  container:
+    imageRegistry: docker.io
+    imageRepository: jackfrancis/kustodian
+    imageTag: main-5b27112

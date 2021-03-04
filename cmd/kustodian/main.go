@@ -1,3 +1,5 @@
+// Licensed under the MIT license.
+// Inspired by the kured project: https://github.com/weaveworks/kured
 package main
 
 import (
@@ -112,7 +114,7 @@ func newCommand(name string, arg ...string) *exec.Cmd {
 
 func sentinelExists() bool {
 	// Relies on hostPID:true and privileged:true to enter host mount space
-	sentinelCmd := newCommand("/usr/bin/nsenter", "-m/proc/1/ns/mnt", "--", "/usr/bin/test", "-f", maintenanceSentinel)
+	sentinelCmd := newCommand("/usr/bin/test", "-f", maintenanceSentinel)
 	if err := sentinelCmd.Run(); err != nil {
 		switch err := err.(type) {
 		case *exec.ExitError:
@@ -203,12 +205,18 @@ func uncordon(client *kubernetes.Clientset, node *v1.Node) {
 }
 
 func markAsMaintenanceInProgress(nodeID string) {
-	log.Infof("Marking node %s for maintenance", nodeID)
-
-	// Relies on hostPID:true and privileged:true to enter host mount space
-	maintenanceInProgressCmd := newCommand("/usr/bin/nsenter", "-m/proc/1/ns/mnt", "/usr/bin/touch", KustodianMaintenanceInProgressSentinelFilePath)
+	log.Infof("Marking node %s for maintenance by creating %s sentinel file on host filesystem", nodeID, KustodianMaintenanceInProgressSentinelFilePath)
+	maintenanceInProgressCmd := newCommand("touch", KustodianMaintenanceInProgressSentinelFilePath)
 	if err := maintenanceInProgressCmd.Run(); err != nil {
-		log.Fatalf("Error marking node for maintenance: %v", err)
+		log.Fatalf("Error creating %s sentinel file on host filesystem: %v", KustodianMaintenanceInProgressSentinelFilePath, err)
+	}
+}
+
+func removeMaintenanceInProgress(nodeID string) {
+	log.Infof("Node maintenance is over, removing %s from node %s's host filesystem", KustodianMaintenanceInProgressSentinelFilePath, nodeID)
+	maintenanceInProgressCmd := newCommand("rm", "-f", KustodianMaintenanceInProgressSentinelFilePath)
+	if err := maintenanceInProgressCmd.Run(); err != nil {
+		log.Fatalf("Error removing %s sentinel file from host filesystem: %v", KustodianMaintenanceInProgressSentinelFilePath, err)
 	}
 }
 
@@ -300,28 +308,24 @@ func cordonAndDrainAsRequired(nodeID string, window *timewindow.TimeWindow, TTL 
 			preferNoScheduleTaint.Disable()
 			continue
 		}
+		node, err := client.CoreV1().Nodes().Get(context.TODO(), nodeID, metav1.GetOptions{})
+		if err != nil {
+			log.Fatal("Error retrieving node object via k8s API: %v", err)
+		}
 
 		if !maintenanceRequired() {
 			preferNoScheduleTaint.Disable()
 			if holding(lock, &nodeMeta) {
-				node, err := client.CoreV1().Nodes().Get(context.TODO(), nodeID, metav1.GetOptions{})
-				if err != nil {
-					log.Fatal("Error retrieving node object via k8s API: %v", err)
-				}
 				uncordon(client, node)
 				if annotateNodes {
 					if _, ok := node.Annotations[KustodianMaintenanceInProgressAnnotation]; ok {
 						deleteNodeAnnotation(client, nodeID, KustodianMaintenanceInProgressAnnotation)
 					}
 				}
+				removeMaintenanceInProgress(nodeID)
 				release(lock)
 			}
 			continue
-		}
-
-		node, err := client.CoreV1().Nodes().Get(context.TODO(), nodeID, metav1.GetOptions{})
-		if err != nil {
-			log.Fatal("Error retrieving node object via k8s API: %v", err)
 		}
 		nodeMeta.Unschedulable = node.Spec.Unschedulable
 
