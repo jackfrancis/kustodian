@@ -5,4 +5,4 @@ kustodian:
   container:
     imageRegistry: docker.io
     imageRepository: jackfrancis/kustodian
-    imageTag: go-1.19-e8be0d8
+    imageTag: main-e374f46
