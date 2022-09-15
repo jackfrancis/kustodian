@@ -110,13 +110,13 @@ spec:
             #            - --lock-annotation=k8s.io/kustodian-node-lock
             - --period=1m
             #            - --reboot-days=sun,mon,tue,wed,thu,fri,sat
-            #            - --maintenance-sentinel=/var/run/maintenance-required
+            #            - --maintenance-sentinel=/var/maintenance-required
             #            - --start-time=0:00
             #            - --time-zone=UTC
             - --annotate-nodes=true
           volumeMounts:
-            - name: var-run
-              mountPath: /var/run
+            - name: var
+              mountPath: /var
           resources:
             requests:
               cpu: 5m
@@ -126,7 +126,7 @@ spec:
               memory: 32Mi
       volumes:
         - hostPath:
-            path: /var/run
-          name: var-run
+            path: /var
+          name: var
       nodeSelector:
         kubernetes.io/os: linux

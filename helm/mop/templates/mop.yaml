@@ -21,18 +21,14 @@ spec:
             - sh
             - -c
             - >-
-              until [ ! -f /var/run/maintenance-required ] && [ ! -f /var/run/maintenance-in-progress ]; do
-                  echo "maintenance already in-progress, will wait";
-                  sleep 5;
-              done;
-              touch /var/run/maintenance-required;
-              until test -f /var/run/maintenance-in-progress; do
+              touch /var/maintenance-required;
+              until test -f /var/maintenance-in-progress; do
                   echo "waiting in the maintenance queue";
                   sleep 5;
               done;
           volumeMounts:
-            - name: var-run
-              mountPath: /var/run
+            - name: var
+              mountPath: /var
         - name: {{ .Values.mop.name }}-get-script
           image: curlimages/curl:latest
           imagePullPolicy: IfNotPresent
@@ -52,15 +48,15 @@ spec:
             - -c
             - >-
               chmod +x {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh;
-              echo -e >/etc/cron.d/mop "* * * * * root sh -c 'rm -f /etc/cron.d/mop; {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh && rm -f /var/run/maintenance-required' >/var/log/mop-{{ .Values.mop.name }}.log 2>&1";
+              echo -e >/etc/cron.d/mop "* * * * * root sh -c 'rm -f /etc/cron.d/mop; {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh && rm -f /var/maintenance-required' >/var/log/mop-{{ .Values.mop.name }}.log 2>&1";
               until test -f /var/log/mop-{{ .Values.mop.name }}.log; do
                   echo "waiting for cron to execute {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh"
                   sleep 5
               done;
               tail -f /var/log/mop-{{ .Values.mop.name }}.log;
           volumeMounts:
-            - name: var-run
-              mountPath: /var/run
+            - name: var
+              mountPath: /var
             - name: var-log
               mountPath: /var/log
             - name: node-crond
@@ -72,8 +68,8 @@ spec:
       terminationGracePeriodSeconds: 0
       volumes:
         - hostPath:
-            path: /var/run
-          name: var-run
+            path: /var
+          name: var
         - hostPath:
             path: /var/log
           name: var-log

@@ -48,9 +48,9 @@ var (
 
 const (
 	// KustodianMaintenanceRequiredSentinelFilePath is the canonical filepath for indicating that node maintenance is required
-	KustodianMaintenanceRequiredSentinelFilePath string = "/var/run/maintenance-required"
+	KustodianMaintenanceRequiredSentinelFilePath string = "/var/maintenance-required"
 	// KustodianMaintenanceInProgressSentinelFilePath is the canonical filepath for indicating that active node maintenance is in progress
-	KustodianMaintenanceInProgressSentinelFilePath string = "/var/run/maintenance-in-progress"
+	KustodianMaintenanceInProgressSentinelFilePath string = "/var/maintenance-in-progress"
 	// KustodianNodeLockAnnotation is the canonical string value for the kustodian node-lock annotation
 	KustodianNodeLockAnnotation string = "k8s.io/kustodian-node-lock"
 	// KustodianMaintenanceInProgressAnnotation is the canonical string value for the maintenance-in-progress annotation
@@ -73,6 +73,8 @@ func main() {
 		"name of daemonset on which to place lock")
 	rootCmd.PersistentFlags().StringVar(&maintenanceSentinel, "maintenance-sentinel", KustodianMaintenanceRequiredSentinelFilePath,
 		"path to file whose existence signals that maintenance is needed")
+	rootCmd.PersistentFlags().StringVar(&preferNoScheduleTaintName, "prefer-no-schedule-taint", KustodianMaintenanceRequiredSentinelFilePath,
+		"Taint name applied during pending node reboot (to prevent receiving additional pods from other rebooting nodes). Disabled by default. Set e.g. to \"kustodian/maintenance\" to enable tainting.")
 	rootCmd.PersistentFlags().StringVar(&lockAnnotation, "lock-annotation", KustodianNodeLockAnnotation,
 		"annotation in which to record locking node")
 	rootCmd.PersistentFlags().DurationVar(&lockTTL, "lock-ttl", 0,
@@ -282,21 +284,24 @@ func cordonAndDrainAsRequired(nodeID string, window *timewindow.TimeWindow, TTL 
 		if err != nil {
 			log.Fatal("Error retrieving node object via k8s API: %v", err)
 		}
-		if !nodeMeta.Unschedulable {
+		if !maintenanceRequired() {
 			uncordon(client, node)
-		}
-		if annotateNodes && !maintenanceRequired() {
-			if _, ok := node.Annotations[KustodianMaintenanceInProgressAnnotation]; ok {
-				deleteNodeAnnotation(client, nodeID, KustodianMaintenanceInProgressAnnotation)
+			release(lock)
+			if annotateNodes {
+				if _, ok := node.Annotations[KustodianMaintenanceInProgressAnnotation]; ok {
+					deleteNodeAnnotation(client, nodeID, KustodianMaintenanceInProgressAnnotation)
+				}
 			}
 		}
-		release(lock)
 	}
 
-	preferNoScheduleTaint := taints.New(client, nodeID, preferNoScheduleTaintName, v1.TaintEffectPreferNoSchedule)
+	var preferNoScheduleTaint *taints.Taint
+	if preferNoScheduleTaintName != "" {
+		preferNoScheduleTaint = taints.New(client, nodeID, preferNoScheduleTaintName, v1.TaintEffectPreferNoSchedule)
+	}
 
 	// Remove taint immediately during startup to quickly allow scheduling again.
-	if !maintenanceRequired() {
+	if preferNoScheduleTaint != nil && !maintenanceRequired() {
 		preferNoScheduleTaint.Disable()
 	}
 
@@ -305,7 +310,9 @@ func cordonAndDrainAsRequired(nodeID string, window *timewindow.TimeWindow, TTL 
 	for range tick {
 		if !window.Contains(time.Now()) {
 			// Remove taint outside the maintenance time window to allow for normal operation.
-			preferNoScheduleTaint.Disable()
+			if preferNoScheduleTaint != nil {
+				preferNoScheduleTaint.Disable()
+			}
 			continue
 		}
 		node, err := client.CoreV1().Nodes().Get(context.TODO(), nodeID, metav1.GetOptions{})
@@ -314,7 +321,9 @@ func cordonAndDrainAsRequired(nodeID string, window *timewindow.TimeWindow, TTL 
 		}
 
 		if !maintenanceRequired() {
-			preferNoScheduleTaint.Disable()
+			if preferNoScheduleTaint != nil {
+				preferNoScheduleTaint.Disable()
+			}
 			if holding(lock, &nodeMeta) {
 				uncordon(client, node)
 				if annotateNodes {
@@ -343,8 +352,10 @@ func cordonAndDrainAsRequired(nodeID string, window *timewindow.TimeWindow, TTL 
 		}
 
 		if !acquire(lock, &nodeMeta, TTL) {
-			// Prefer to not schedule pods onto this node to avoid draining the same pod multiple times.
-			preferNoScheduleTaint.Enable()
+			if preferNoScheduleTaint != nil {
+				// Prefer to not schedule pods onto this node to avoid draining the same pod multiple times.
+				preferNoScheduleTaint.Enable()
+			}
 			continue
 		}
 
