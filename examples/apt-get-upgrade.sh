@@ -1,6 +1,7 @@
 #!/bin/bash
 # assumes run as root
 export DEBIAN_FRONTEND=noninteractive
+export PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 wait_for_apt_locks() {
   while fuser /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock >/dev/null 2>&1; do
     echo 'Waiting for release of apt locks'
@@ -15,7 +16,6 @@ wait_for_reboot() {
 }
 wait_for_reboot
 wait_for_apt_locks
-dpkg --configure -a --force-confdef
 apt-get update
 wait_for_apt_locks
 apt-mark unhold $(apt-mark showhold | grep -v 'kube')
