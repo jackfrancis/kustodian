@@ -73,8 +73,8 @@ func main() {
 		"name of daemonset on which to place lock")
 	rootCmd.PersistentFlags().StringVar(&maintenanceSentinel, "maintenance-sentinel", KustodianMaintenanceRequiredSentinelFilePath,
 		"path to file whose existence signals that maintenance is needed")
-	rootCmd.PersistentFlags().StringVar(&preferNoScheduleTaintName, "prefer-no-schedule-taint", KustodianMaintenanceRequiredSentinelFilePath,
-		"Taint name applied during pending node reboot (to prevent receiving additional pods from other rebooting nodes). Disabled by default. Set e.g. to \"kustodian/maintenance\" to enable tainting.")
+	rootCmd.PersistentFlags().StringVar(&preferNoScheduleTaintName, "prefer-no-schedule-taint", "",
+		"Taint name applied during pending node reboot (to prevent receiving additional pods from other rebooting nodes). Disabled by default. Set e.g. to \"kustodian.maintenance\" to enable tainting.")
 	rootCmd.PersistentFlags().StringVar(&lockAnnotation, "lock-annotation", KustodianNodeLockAnnotation,
 		"annotation in which to record locking node")
 	rootCmd.PersistentFlags().DurationVar(&lockTTL, "lock-ttl", 0,
