@@ -23,9 +23,23 @@ spec:
             - >-
               touch /var/maintenance-required;
               until test -f /var/maintenance-in-progress; do
-                  echo "waiting in the maintenance queue";
-                  sleep 5;
+                echo "waiting in the maintenance queue";
+                sleep 5;
               done;
+              until [[ "$READY" == "true" ]]; do
+                READY=true;
+                if ls /var/*.maintenance; then
+                  for filename in $(find /var/ -maxdepth 1 -name '*.maintenance'); do
+                    if [[ "$(basename $filename .maintenance)" -lte "{{.Values.mop.priority}}" ]]; then
+                      READY=false;
+                    fi
+                  done;
+                fi
+                if [[ "$READY" != "true" ]]; then
+                  sleep 1;
+                fi
+              done;
+              touch /var/{{.Values.mop.priority}}.maintenance;
           volumeMounts:
             - name: var
               mountPath: /var
@@ -48,7 +62,7 @@ spec:
             - -c
             - >-
               chmod +x {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh;
-              echo -e >/etc/cron.d/mop "* * * * * root sh -c 'rm -f /etc/cron.d/mop; {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh && rm -f /var/maintenance-required' >/var/log/mop-{{ .Values.mop.name }}.log 2>&1";
+              echo -e >/etc/cron.d/mop "* * * * * root sh -c 'rm -f /etc/cron.d/mop; {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh && rm -f /var/{{.Values.mop.priority}}.maintenance && sleep 5 && test -f /var/*.maintenance || rm -f /var/maintenance-required' >/var/log/mop-{{ .Values.mop.name }}.log 2>&1";
               until test -f /var/log/mop-{{ .Values.mop.name }}.log; do
                   echo "waiting for cron to execute {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh"
                   sleep 5
