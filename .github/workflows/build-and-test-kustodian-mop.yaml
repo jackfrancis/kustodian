@@ -74,3 +74,20 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         run: ./scripts/ci-e2e.sh
         working-directory: capz
+      - name: setup kubeconfigs
+        run: |
+          mkdir -p .kube
+          kind get kubeconfig --name capz-e2e > .kube/capz-e2e.kubeconfig
+          echo "CLUSTER_NAMESPACE=$(k get clusters -A --no-headers=true | cut -d ' ' -f1)" >> $GITHUB_ENV
+          echo "CLUSTER_NAME=$(k get cluster -n ${{ env.CLUSTER_NAMESPACE }} --no-headers=true))" >> $GITHUB_ENV
+          k get secret ${{ env.CLUSTER_NAME }}-kubeconfig -n ${{ env.CLUSTER_NAMESPACE }} -o jsonpath={.data.value} | base64 --decode > .kube/${{ env.CLUSTER_NAME }}.kubeconfig
+        working-directory: capz
+      - name: install kured
+        run: |
+          helm --kubeconfig capz/.kube/${{ env.CLUSTER_NAME }}.kubeconfig install --generate-name --repo https://kubereboot.github.io/charts/ kured --set configuration.annotateNodes=true --set configuration.period=1m
+      - name: install kustodian
+        run: |
+          helm --kubeconfig capz/.kube/${{ env.CLUSTER_NAME }}.kubeconfig install kustodian helm/kustodian
+      - name: install upgrade-ubuntu mop script
+        run: |
+          helm --kubeconfig capz/.kube/${{ env.CLUSTER_NAME }}.kubeconfig install upgrade-ubuntu helm/mop --set mop.targetScript=https://raw.githubusercontent.com/jackfrancis/kustodian/$GITHUB_SHA/examples/apt-get-upgrade.sh
