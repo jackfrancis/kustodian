@@ -83,6 +83,7 @@ spec:
     metadata:
       labels:
         name: {{ .Values.kustodian.name }}
+        app: {{ .Values.kustodian.name }}
     spec:
       serviceAccountName: {{ .Values.kustodian.name }}
       tolerations:
