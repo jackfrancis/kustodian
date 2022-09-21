@@ -16,7 +16,7 @@ spec:
     spec:
       initContainers:
         - name: maintenance-queue
-          image: alpine:3.12
+          image: alpine:3.16
           command:
             - sh
             - -c
@@ -42,7 +42,7 @@ spec:
               mountPath: {{ .Values.mop.everyoneWriteablePath }}
       containers:
         - name: {{ .Values.mop.name }}
-          image: alpine:3.12
+          image: alpine:3.16
           command:
             - sh
             - -c
