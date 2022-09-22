@@ -12,6 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackfrancis/kustodian/pkg/basicserver"
+	mylog "github.com/jackfrancis/kustodian/pkg/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/weaveworks/kured/pkg/daemonsetlock"
@@ -44,6 +49,11 @@ var (
 	maintenanceEnd   string
 	timezone         string
 	annotateNodes    bool
+
+	metricserver            *basicserver.BasicServer
+	nodeInMaintenanceWindow prometheus.Gauge
+	maintenanceInProgress   prometheus.Gauge
+	maintenanceCompleted    prometheus.Counter
 )
 
 const (
@@ -57,6 +67,8 @@ const (
 	KustodianMaintenanceInProgressAnnotation string = "k8s.io/maintenance-in-progress"
 	// KustodianMostRecentMaintenanceNeededAnnotation is the canonical string value for the most-recent-maintenance-needed annotation
 	KustodianMostRecentMaintenanceNeededAnnotation string = "k8s.io/most-recent-maintenance-needed"
+	// prefix for metrics
+	KustodianMetricPrefix string = "kustodian"
 )
 
 func main() {
@@ -314,6 +326,8 @@ func cordonAndDrainAsRequired(nodeID string, window *timewindow.TimeWindow, TTL 
 				preferNoScheduleTaint.Disable()
 			}
 			continue
+		} else {
+
 		}
 		node, err := client.CoreV1().Nodes().Get(context.TODO(), nodeID, metav1.GetOptions{})
 		if err != nil {
@@ -333,6 +347,8 @@ func cordonAndDrainAsRequired(nodeID string, window *timewindow.TimeWindow, TTL 
 				}
 				removeMaintenanceInProgress(nodeID)
 				release(lock)
+				maintenanceInProgress.Dec()
+				maintenanceCompleted.Inc()
 			}
 			continue
 		}
@@ -361,10 +377,30 @@ func cordonAndDrainAsRequired(nodeID string, window *timewindow.TimeWindow, TTL 
 
 		cordonanddrain(client, node)
 		markAsMaintenanceInProgress(nodeID)
+		maintenanceInProgress.Inc()
 	}
 }
 
+func createMetrics() {
+	nodeInMaintenanceWindow = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: KustodianMetricPrefix + "_node_in_maintenance_window",
+		Help: "Whether the node is in the maintenance window",
+	})
+	maintenanceInProgress = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: KustodianMetricPrefix + "_node_performing_maintenance",
+		Help: "Whether the node is in the maintenance window",
+	})
+	maintenanceCompleted = promauto.NewCounter(prometheus.CounterOpts{
+		Name: KustodianMetricPrefix + "_node_completed_maintenance",
+		Help: "Node completed maintenance",
+	})
+}
+
 func root(cmd *cobra.Command, args []string) {
+	mylog.Init(logrus.WarnLevel)
+	createMetrics()
+	metricserver = basicserver.CreateBasicServer()
+	metricserver.StartListen(basicserver.DefaultMux())
 	log.Infof("kustodian: Kubernetes Node Maintenance %s", version)
 
 	nodeID := os.Getenv("KUSTODIAN_NODE_ID")
