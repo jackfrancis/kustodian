@@ -21,6 +21,10 @@ spec:
             - sh
             - -c
             - >-
+              while fuser /var/run/reboot-required >/dev/null 2>&1; do
+                echo 'Reboot pending';
+                sleep 30;
+              done;
               touch /var/maintenance-required;
               until test -f /var/maintenance-in-progress; do
                 echo "waiting in the maintenance queue";
@@ -28,8 +32,8 @@ spec:
               done;
               until [[ "$READY" == "true" ]]; do
                 READY=true;
-                if ls /var/*.maintenance; then
-                  for filename in $(find /var/ -maxdepth 1 -name '*.maintenance'); do
+                if ls /var/run/*.maintenance; then
+                  for filename in $(find /var/run -maxdepth 1 -name '*.maintenance'); do
                     if [[ "$(basename $filename .maintenance)" -lte "{{.Values.mop.priority}}" ]]; then
                       READY=false;
                     fi
@@ -39,7 +43,7 @@ spec:
                   sleep 1;
                 fi
               done;
-              touch /var/{{.Values.mop.priority}}.maintenance;
+              touch /var/run/{{.Values.mop.priority}}.maintenance;
           volumeMounts:
             - name: var
               mountPath: /var
@@ -61,8 +65,12 @@ spec:
             - sh
             - -c
             - >-
+              while fuser /var/run/reboot-required >/dev/null 2>&1; do
+                echo 'Reboot pending';
+                sleep 30;
+              done;
               chmod +x {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh;
-              echo -e >/etc/cron.d/mop "* * * * * root sh -c 'rm -f /etc/cron.d/mop; {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh && rm -f /var/{{.Values.mop.priority}}.maintenance && sleep 5 && test -f /var/*.maintenance || rm -f /var/maintenance-required' >/var/log/mop-{{ .Values.mop.name }}.log 2>&1";
+              echo -e >/etc/cron.d/mop "* * * * * root sh -c 'rm -f /etc/cron.d/mop; {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh && sleep 30; while fuser /var/run/reboot-required >/dev/null 2>&1; do sleep 3; done; echo {{ .Values.mop.name }} executed successfully; rm -f /var/run/{{.Values.mop.priority}}.maintenance && sleep 5 && test -f /var/run/*.maintenance || rm -f /var/maintenance-required' >/var/log/mop-{{ .Values.mop.name }}.log 2>&1";
               until test -f /var/log/mop-{{ .Values.mop.name }}.log; do
                   echo "waiting for cron to execute {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh"
                   sleep 5
