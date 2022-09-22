@@ -3,5 +3,8 @@
 mop:
   name: mop
   targetScript: "https://raw.githubusercontent.com/jackfrancis/kustodian/main/examples/update-docker.sh"
+  validationScript: "https://raw.githubusercontent.com/jackfrancis/kustodian/main/examples/systemctl-validate.sh"
   everyoneWriteablePath: "/tmp"
   priority: "99"
+validation:
+  enabled: false

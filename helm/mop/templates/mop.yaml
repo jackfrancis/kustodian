@@ -55,6 +55,9 @@ spec:
             - -c
             - >-
               curl -fSL -o {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh {{ .Values.mop.targetScript }};
+{{- if .Values.validation.enabled }}
+              curl -fSL -o {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}-validate.sh {{ .Values.mop.validationScript }};
+{{- end }}
           volumeMounts:
             - name: script-write-path
               mountPath: {{ .Values.mop.everyoneWriteablePath }}
@@ -70,7 +73,7 @@ spec:
                 sleep 30;
               done;
               chmod +x {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh;
-              echo -e >/etc/cron.d/mop "* * * * * root sh -c 'rm -f /etc/cron.d/mop; {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh && sleep 30; while fuser /var/run/reboot-required >/dev/null 2>&1; do sleep 3; done; echo {{ .Values.mop.name }} executed successfully; rm -f /var/run/{{.Values.mop.priority}}.maintenance && sleep 5 && test -f /var/run/*.maintenance || rm -f /var/maintenance-required' >/var/log/mop-{{ .Values.mop.name }}.log 2>&1";
+              echo -e >/etc/cron.d/mop "* * * * * root sh -c 'rm -f /etc/cron.d/mop; {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh && sleep 30; while fuser /var/run/reboot-required >/dev/null 2>&1; do sleep 3; done; echo {{ .Values.mop.name }} executed successfully; {{if not .Values.validation.enabled }}rm -f /var/run/{{.Values.mop.priority}}.maintenance && sleep 5 && test -f /var/run/*.maintenance || rm -f /var/maintenance-required{{else}}touch /var/{{.Values.mop.priority}}.validation-required;{{end}}' >/var/log/mop-{{ .Values.mop.name }}.log 2>&1";
               until test -f /var/log/mop-{{ .Values.mop.name }}.log; do
                   echo "waiting for cron to execute {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh"
                   sleep 5
@@ -85,6 +88,34 @@ spec:
               mountPath: /etc/cron.d
             - name: script-write-path
               mountPath: {{ .Values.mop.everyoneWriteablePath }}
+{{- if .Values.validation.enabled }}
+        - name: {{ .Values.mop.name }}-validate
+          image: alpine:3.16
+          command:
+            - sh
+            - -c
+            - >-
+              until test -f /var/{{.Values.mop.priority}}.validation-required; do
+                  echo "waiting for successful execution of {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}.sh"
+                  sleep 5
+              done;
+              chmod +x {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}-validate.sh;
+              echo -e >/etc/cron.d/mop-validate "* * * * * root sh -c 'rm -f /etc/cron.d/mop-validate; {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}-validate.sh && echo {{ .Values.mop.name }} validated successfully; rm -f /var/run/{{.Values.mop.priority}}.maintenance && sleep 5 && test -f /var/run/*.maintenance || rm -f /var/maintenance-required' >/var/log/mop-{{ .Values.mop.name }}-validate.log 2>&1";
+              until test -f /var/log/mop-{{ .Values.mop.name }}-validate.log; do
+                  echo "waiting for cron to execute {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}-vaidate.sh"
+                  sleep 5
+              done;
+              tail -f /var/log/mop-{{ .Values.mop.name }}-validate.log;
+          volumeMounts:
+            - name: var
+              mountPath: /var
+            - name: var-log
+              mountPath: /var/log
+            - name: node-crond
+              mountPath: /etc/cron.d
+            - name: script-write-path
+              mountPath: {{ .Values.mop.everyoneWriteablePath }}
+{{- end }}
       nodeSelector:
         kubernetes.io/os: linux
       terminationGracePeriodSeconds: 0
