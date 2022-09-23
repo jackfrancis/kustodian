@@ -1,12 +1,12 @@
 # Kustodian
 
-The kustodian project is a Kubernetes-native solution to the problem of safely performing in-place node maintenance tasks.
+The Kustodian project is a Kubernetes-native solution to the problem of safely performing in-place node maintenance tasks.
 
 # Status of Project
 
-The kustodian set of tools are currently experimental.
+The Kustodian set of tools are currently experimental.
 
-# Purpose of kustodian
+# Purpose of Kustodian
 
 This project is inspired by [the Kured project](https://github.com/kubereboot/kured), which is the de facto standard Kubernetes tool for automating reliable, graceful node reboots in a cluster.
 
@@ -30,7 +30,7 @@ After the node is successfully cordoned + drained, the Kustodian daemon then cre
 
 At this point, Kustodian waits for the **non-existence** of the original sentinel file `/var/maintenance-required`, which indicates that node maintenance is complete. The sentinel file `/var/maintenance-in-progress` is then deleted, and the node is rejoined to the cluster via an uncordon operation.
 
-The Kustodian daemon does the above continually on all nodes: the practical outcome is that for a given node maintenance operation meant to be performed on *all* nodes, kustodian only executes maintenance on one node at a time, and only after that node is able to be successfully cordoned + drained.
+The Kustodian daemon does the above continually on all nodes: the practical outcome is that for a given node maintenance operation meant to be performed on *all* nodes, Kustodian only executes maintenance on one node at a time, and only after that node is able to be successfully cordoned + drained.
 
 The above follows a sort of [pub sub pattern](https://en.wikipedia.org/wiki/Publish–subscribe_pattern), using the host OS filesystem to pass messages back and forth between the Kustodian daemon, which has privileged access to the Kubernetes cluster, and a node maintenance runtime, which has privileged access to the host OS.
 
@@ -42,7 +42,7 @@ This decribes the behavior from the persepctive of the Kustodian daemon. To desc
   - If the operation of the maintenance script has failed, or produced undesired side effects, the script would purposefully *not* delete the `/var/maintenance-required` sentinel file on the host filesystem. Keeping that file around guarantees that this Kubernetes node will continue to be cordoned (not actively participating in the cluster); furthermore, it will guarantee that no other nodes will be negatively affected similarly (Kustodian's "single node maintenance lock" will continue to be reserved by this node).
 4. The script must also be sensitive to the outcome of a required reboot resulting from its performed work (e.g., updating the Linux kernel). Thus, the script should be idempotent, so that it can run again successively, making forward progress continually until its goal state is achieved.
 
-Below is how a script might look that implements the kustodian daemonset specification:
+Below is how a script might look that implements the Kustodian daemonset specification:
 
 ```bash
 #!/bin/bash
@@ -52,14 +52,14 @@ while fuser /var/run/reboot-required >/dev/null 2>&1; do
   echo 'Reboot pending';
   sleep 30;
 done;
-# if another script is already running on this host following the kustodian pattern, then wait
+# if another script is already running on this host following the Kustodian pattern, then wait
 until [ ! -f /var/maintenance-required ] && [ ! -f /var/maintenance-in-progress ]; do
     echo "maintenance already in-progress, will wait";
     sleep 5;
 done;
 # request maintenance
 touch /var/maintenance-required;
-# wait until kustodian indicates that this node has been cordoned + drained, and exclusive maintenance reserved
+# wait until Kustodian indicates that this node has been cordoned + drained, and exclusive maintenance reserved
 until test -f /var/maintenance-in-progress; do
     echo "waiting in the maintenance queue";
     sleep 5;
@@ -76,7 +76,7 @@ rm -f /var/maintenance-required
 Yes! There is a prototype helm chart under `helm/kustodian` which will install the Kustodian daemonset on all nodes on your cluster. For example, assuming you check out this repository (or a fork of it), and your terminal is in the working directory of the git root:
 
 ```sh
-$ helm upgrade --install kustodian helm/kustodian
+$ helm install kustodian helm/kustodian
 ```
 
 In addition, there is a prototype helm chart that allows you to experiement with running maintenance scripts that can be accessed over the public internet (or at least from the network that your node host OS is running in). An example script has been provided that updates an Ubuntu-backed node via apt. For example:
