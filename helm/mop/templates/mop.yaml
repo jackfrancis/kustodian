@@ -100,9 +100,9 @@ spec:
                   sleep 5
               done;
               chmod +x {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}-validate.sh;
-              echo -e >/etc/cron.d/mop-validate "* * * * * root sh -c 'rm -f /etc/cron.d/mop-validate; {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}-validate.sh && echo {{ .Values.mop.name }} validated successfully; rm -f /var/run/{{.Values.mop.priority}}.maintenance && sleep 5 && test -f /var/run/*.maintenance || rm -f /var/maintenance-required' >/var/log/mop-{{ .Values.mop.name }}-validate.log 2>&1";
+              echo -e >/etc/cron.d/mop-validate "* * * * * root sh -c 'rm -f /etc/cron.d/mop-validate; {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}-validate.sh && echo {{ .Values.mop.name }} validated successfully; rm -f /var/{{.Values.mop.priority}}.validation-required && rm -f /var/run/{{.Values.mop.priority}}.maintenance && sleep 5 && test -f /var/run/*.maintenance || rm -f /var/maintenance-required' >/var/log/mop-{{ .Values.mop.name }}-validate.log 2>&1";
               until test -f /var/log/mop-{{ .Values.mop.name }}-validate.log; do
-                  echo "waiting for cron to execute {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}-vaidate.sh"
+                  echo "waiting for cron to execute {{ .Values.mop.everyoneWriteablePath }}/mop-{{ .Values.mop.name }}-validate.sh"
                   sleep 5
               done;
               tail -f /var/log/mop-{{ .Values.mop.name }}-validate.log;
