@@ -3,6 +3,6 @@
 kustodian:
   name: kustodian
   container:
-    imageRegistry: docker.io
-    imageRepository: jackfrancis/kustodian
-    imageTag: main-4308280
+    imageRegistry: ghcr.io
+    imageRepository: jackfrancis/kustodian/kustodian
+    imageTag: main-47b350a
