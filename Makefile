@@ -1,5 +1,5 @@
 .DEFAULT: all
-.PHONY: all clean image publish-image minikube-publish
+.PHONY: all clean image publish-image
 
 DH_ORG=jackfrancis
 VERSION=$(shell git symbolic-ref --short HEAD)-$(shell git rev-parse --short HEAD)
@@ -22,14 +22,11 @@ cmd/kustodian/kustodian: cmd/kustodian/*.go
 build/.image.done: cmd/kustodian/Dockerfile cmd/kustodian/kustodian
 	mkdir -p build
 	cp $^ build
-	$(SUDO) docker build -t docker.io/$(DH_ORG)/kustodian -f build/Dockerfile ./build
-	$(SUDO) docker tag docker.io/$(DH_ORG)/kustodian docker.io/$(DH_ORG)/kustodian:$(VERSION)
+	$(SUDO) docker build -t ghcr.io/$(DH_ORG)/kustodian/kustodian -f build/Dockerfile ./build
+	$(SUDO) docker tag ghcr.io/$(DH_ORG)/kustodian/kustodian ghcr.io/$(DH_ORG)/kustodian/kustodian:$(VERSION)
 	touch $@
 
 image: build/.image.done
 
 publish-image: image
-	$(SUDO) docker push docker.io/$(DH_ORG)/kustodian:$(VERSION)
-
-minikube-publish: image
-	$(SUDO) docker save docker.io/$(DH_ORG)/kustodian | (eval $$(minikube docker-env) && docker load)
+	$(SUDO) docker push ghcr.io/$(DH_ORG)/kustodian/kustodian:$(VERSION)
