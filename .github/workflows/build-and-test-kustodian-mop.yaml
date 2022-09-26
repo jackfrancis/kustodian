@@ -5,9 +5,6 @@ on:
       image_tag:
         description: 'Identify image by this tag'
         required: true
-  pull_request_target:
-    branches:
-      - main
 jobs:
   build-and-test-kustodian-mop:
     runs-on: ubuntu-latest
